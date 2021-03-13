@@ -1,9 +1,6 @@
-
 import chess
 import random
 import numpy as np
-
-
 
 # arvorezada 
 tree = {}
@@ -18,9 +15,7 @@ pieces = {
     chess.KING: 20000
 }
 
-
 def evaluate(board):
-    
     vWhite = 0
     vBlack = 0
     for piece in board.piece_map().values():
@@ -37,46 +32,59 @@ def evaluate(board):
     #FinalGame -> Algoritmos de Vitoria
     return vWhite - vBlack
 
-def populateTree(fen, depth):
-    if depth == 0:
-        return evaluate()
+def minimax_alfabeta(jogo, turno_max, jogador, profundidade_maxima = 8, alfa = float("-inf"), beta = float("inf")):
+  # se o jogo acabou ou se a profundidade é máxima
+  if jogo.venceu() or jogo.empate() or profundidade_maxima == 0:
+    return jogo.calcular_utilidadex(jogador)
 
-    legalMoves = list(board.legal_moves)
-    tree[fen] = legalMoves
-    for move in legalMoves:
-        board.push(move)
-        populateTree(board.fen(), depth - 1)
-        board.pop()
+  if turno_max: # turno do MAX
+    for proximo_jogo in jogo.jogos_validos():
+      utilidade = minimax_alfabeta(jogo.jogar(proximo_jogo), False, jogador, profundidade_maxima - 1, alfa, beta)
+      alfa = max(utilidade, alfa)
+      if beta <= alfa:
+        break
+      return alfa
+  else: # turno no MIN
+    for proximo_jogo in jogo.jogos_validos():
+      utilidade = minimax_alfabeta(jogo.jogar(proximo_jogo), True, jogador, profundidade_maxima - 1, alfa, beta)
+      beta = min(utilidade, beta)
+      if beta <= alfa:
+        break
+      return beta
 
-def minimax(board, depth, maximizing_player):
+def minimax(board, depth, maximizing_player, alfa = float("-inf"), beta = float("inf")):
     if depth == 0 or board.is_game_over():
         return evaluate(board), board.peek()
 
     if maximizing_player:
-        value = -float('inf')
         lastMove = None
         for move in board.legal_moves:
             board.push(move)
-            valueAux = minimax(board, depth - 1, False)
-            if value > valueAux[0]:
+            valueAux = minimax(board, depth - 1, False, alfa, beta)
+            if beta <= alfa:
+            	board.pop()
+            	break
+            if alfa > valueAux[0]:
                 board.pop()
             else:
-                value = valueAux[0]
+                alfa = valueAux[0]
                 lastMove = board.pop()
-        return value, lastMove
+        return alfa, lastMove
 
     else:
-        value = float('inf')
         lastMove = None
         for move in board.legal_moves:
             board.push(move)
-            valueAux = minimax(board, depth - 1, True)
-            if value < valueAux[0]:
+            valueAux = minimax(board, depth - 1, True, alfa, beta)
+            if beta <= alfa:
+            	board.pop()
+            	break
+            if beta < valueAux[0]:
                 board.pop()
             else:
-                value = valueAux[0]
+                beta = valueAux[0]
                 lastMove = board.pop()
-        return value, lastMove
+        return beta, lastMove
 
 
 def jogar():
@@ -93,7 +101,7 @@ def jogar():
         print(f'{board} \n')
 
     if board.is_stalemate():
-        return "Stalmate"
+        return "Stalemate"
     if board.is_checkmate():
         return "Checkmate"
     if board.is_insufficient_material():
@@ -102,7 +110,6 @@ def jogar():
         return "SeventyFive"
     if board.is_fivefold_repetition():
         return "FiveFold"
-
 
 board = chess.Board()
 board.push_san("e4")
@@ -116,5 +123,3 @@ print(f'{board} \n')
 
 # populateTree(board.fen(), 1)
 # print(tree)
-
-
