@@ -2,9 +2,6 @@ import chess
 import random
 import numpy as np
 
-# arvorezada 
-tree = {}
-
 # peças
 pieces = {
     chess.PAWN: 100,
@@ -31,26 +28,6 @@ def evaluate(board):
         
     #FinalGame -> Algoritmos de Vitoria
     return vWhite - vBlack
-
-def minimax_alfabeta(jogo, turno_max, jogador, profundidade_maxima = 8, alfa = float("-inf"), beta = float("inf")):
-  # se o jogo acabou ou se a profundidade é máxima
-  if jogo.venceu() or jogo.empate() or profundidade_maxima == 0:
-    return jogo.calcular_utilidadex(jogador)
-
-  if turno_max: # turno do MAX
-    for proximo_jogo in jogo.jogos_validos():
-      utilidade = minimax_alfabeta(jogo.jogar(proximo_jogo), False, jogador, profundidade_maxima - 1, alfa, beta)
-      alfa = max(utilidade, alfa)
-      if beta <= alfa:
-        break
-      return alfa
-  else: # turno no MIN
-    for proximo_jogo in jogo.jogos_validos():
-      utilidade = minimax_alfabeta(jogo.jogar(proximo_jogo), True, jogador, profundidade_maxima - 1, alfa, beta)
-      beta = min(utilidade, beta)
-      if beta <= alfa:
-        break
-      return beta
 
 def minimax(board, depth, maximizing_player, alfa = float("-inf"), beta = float("inf")):
     if depth == 0 or board.is_game_over():
@@ -120,6 +97,3 @@ print(f'\n\n Que comecem os jogos \n\n')
 jogada = jogar()
 print(f'F I N A L - {jogada}')
 print(f'{board} \n')
-
-# populateTree(board.fen(), 1)
-# print(tree)
