@@ -51,14 +51,12 @@ def measureGamePhases(board, move):
     if len(re.findall("(n|r|b)", fen[0])) + len(re.findall("(N|R|B)", fen[7])) < 7:
         points += 100 * 1.6
 
-
     # Transitions mid => late
-
 
     if points > 300:
         phase += 1
-    
-    return phase 
+
+    return phase
 
 # All Phases
 def captureEvaluate(board, move):
@@ -68,11 +66,12 @@ def captureEvaluate(board, move):
         captures.append(pieces[piece.piece_type])
 
     return max(captures)
-    
+
+
 def boardValueEvaluate(board):
     vWhite = 0
     vBlack = 0
-    for piece in board.piece_map().values():      
+    for piece in board.piece_map().values():
         if piece.color == chess.BLACK:
             vBlack += pieces[piece.piece_type]
         else:
@@ -85,31 +84,65 @@ def boardValueEvaluate(board):
 def devMinorsEvaluate(board):
     return 0
 
-def rookEvaluate():
-    return 0
 
-def devPawnsEvaluate():
-    return 0
+def rookEvaluate(board, move):
+    if (board.piece_type_at(move.to_square) != chess.ROOK):
+        return 0
+
+    positionsRooks = [
+        0,  0,  0,  0,  0,  0,  0,  0,
+        5, 10, 10, 10, 10, 10, 10,  5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        0,  0,  0,  5,  5,  0,  0,  0]
+
+    if (board.turn == chess.BLACK):
+        positions = positions[::-1]
+
+    return 70 if is_castling(move) else positions[move.to_square]
 
 
+def devPawnsEvaluate(board, move):
+    if board.piece_type_at(move.to_square()) != chess.PAWN:
+        return 0
+
+    positionsPawns = [
+        0,  0,  0,  0,  0,  0,  0,  0,
+        50, 50, 50, 50, 50, 50, 50, 50,
+        10, 10, 20, 30, 30, 20, 10, 10,
+        5,  5, 10, 25, 25, 10,  5,  5,
+        0,  0,  0, 20, 20,  0,  0,  0,
+        5, -5, -10,  0,  0, -10, -5,  5,
+        5, 10, 10, -20, -20, 10, 10,  5,
+        0,  0,  0,  0,  0,  0,  0,  0
+    ]
+
+    if board.turn == chess.BLACK:
+        positionsPawns = positionsPawns[::-1]
+
+    return positionsPawns[move.to_square()]
 
 # Evaluate
 def evaluate(board, move):
     weight = [
-        {"capture": 1, "boardValue": 2}, 
-        {"capture": 1, "boardValue": 2}, 
+        {"capture": 1, "boardValue": 2},
+        {"capture": 1, "boardValue": 2},
         {"capture": 1, "boardValue": 2}
     ]
     value = 0
     phase = measureGamePhases(board)
-    
-    value += captureEvaluate(board, move) * weight[phase]["capture"] 
-    value += boardValueEvaluate(board) * weight[phase]["boardValue"] 
-    
+
+    value += captureEvaluate(board, move) * weight[phase]["capture"]
+    value += boardValueEvaluate(board) * weight[phase]["boardValue"]
+    devPawnsEvaluate(board, move)
+
     return value
 
 # Minimax
-def minimax(board, depth, maximizing_player, alfa = float("-inf"), beta = float("inf"), move=None):
+def minimax(board, depth, maximizing_player, alfa=float("-inf"), beta=float("inf"), move=None):
     if depth == 0 or board.is_game_over():
         return evaluate(board, move), board.peek()
 
@@ -119,8 +152,8 @@ def minimax(board, depth, maximizing_player, alfa = float("-inf"), beta = float(
             board.push(move)
             valueAux = minimax(board, depth - 1, False, alfa, beta, move)
             if beta <= alfa:
-            	board.pop()
-            	break
+                board.pop()
+                break
             if alfa > valueAux[0]:
                 board.pop()
             else:
@@ -134,8 +167,8 @@ def minimax(board, depth, maximizing_player, alfa = float("-inf"), beta = float(
             board.push(move)
             valueAux = minimax(board, depth - 1, True, alfa, beta, move)
             if beta <= alfa:
-            	board.pop()
-            	break
+                board.pop()
+                break
             if beta < valueAux[0]:
                 board.pop()
             else:
@@ -167,6 +200,7 @@ def play():
         return "SeventyFive"
     if board.is_fivefold_repetition():
         return "FiveFold"
+
 
 board = chess.Board()
 
