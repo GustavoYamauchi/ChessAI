@@ -14,7 +14,6 @@ pieces = {
     chess.KING: 20000
 }
 
-
 piecesToInitialPositions = {
     chess.KNIGHT = [chess.B1, chess.G1, chess.B8, chess.G8]
     chess.BISHOP = [chess.C1, chess.F1, chess.C8, chess.F8]
@@ -92,46 +91,26 @@ def devMinorsEvaluate(board, move):
         return positions[move.to_square]
     return pieceSquareValue[pieceType][move.to_square]
 
-
 def rookEvaluate(board, move):
     if (board.piece_type_at(move.to_square) != chess.ROOK):
         return 0
 
-    positionsRooks = [
-        0,  0,  0,  0,  0,  0,  0,  0,
-        5, 10, 10, 10, 10, 10, 10,  5,
-        -5,  0,  0,  0,  0,  0,  0, -5,
-        -5,  0,  0,  0,  0,  0,  0, -5,
-        -5,  0,  0,  0,  0,  0,  0, -5,
-        -5,  0,  0,  0,  0,  0,  0, -5,
-        -5,  0,  0,  0,  0,  0,  0, -5,
-        0,  0,  0,  5,  5,  0,  0,  0]
-
+    positions = pieceSquareValue[chess.ROOK]
     if (board.turn == chess.BLACK):
-        positions = positions[::-1]
+        positions = pieceSquareValue[chess.ROOK][::-1]
 
     return 70 if is_castling(move) else positions[move.to_square]
 
 
 def devPawnsEvaluate(board, move):
-    if board.piece_type_at(move.to_square()) != chess.PAWN:
+    if board.piece_type_at(move.to_square) != chess.PAWN:
         return 0
 
-    positionsPawns = [
-        0,  0,  0,  0,  0,  0,  0,  0,
-        50, 50, 50, 50, 50, 50, 50, 50,
-        10, 10, 20, 30, 30, 20, 10, 10,
-        5,  5, 10, 25, 25, 10,  5,  5,
-        0,  0,  0, 20, 20,  0,  0,  0,
-        5, -5, -10,  0,  0, -10, -5,  5,
-        5, 10, 10, -20, -20, 10, 10,  5,
-        0,  0,  0,  0,  0,  0,  0,  0
-    ]
-
     if board.turn == chess.BLACK:
-        positionsPawns = positionsPawns[::-1]
+        positionsPawns = pieceSquareValue[chess.PAWN][::-1]
+        return positionsPawns[move.to_square]
 
-    return positionsPawns[move.to_square()]
+    return pieceSquareValue[chess.PAWN][move.to_square]
 
 # Evaluate
 def evaluate(board, move):
