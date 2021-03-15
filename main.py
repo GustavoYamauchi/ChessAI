@@ -2,6 +2,7 @@ import chess
 import random
 import re
 import numpy as np
+from pieceSquareValueTables import pieceSquareValue
 
 # Pieces
 pieces = {
@@ -82,8 +83,15 @@ def boardValueEvaluate(board):
 
 
 # Phase 0 (earlyGame)
-def devMinorsEvaluate(board):
-    return 0
+def devMinorsEvaluate(board, move):
+    pieceType = board.piece_at(move.from_square).piece_type
+    validPieces = {chess.KNIGHT, chess.BISHOP}
+    if not pieceType in validPieces:
+        return 0
+    if (board.turn == chess.BLACK):
+        positions = pieceSquareValue[pieceType][::-1]
+        return positions[move.to_square]
+    return pieceSquareValue[pieceType][move.to_square]
 
 def rookEvaluate():
     return 0
