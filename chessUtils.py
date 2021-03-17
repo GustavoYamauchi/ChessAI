@@ -1,5 +1,21 @@
 import chess
 
+pieceValues = {
+    None: 0,
+    chess.PAWN: 100,
+    chess.ROOK: 500,
+    chess.KNIGHT: 320,
+    chess.BISHOP: 330,
+    chess.QUEEN: 900,
+    chess.KING: 20000
+}
+
+piecesToInitialPositions = {
+    chess.KNIGHT: [chess.B1, chess.G1, chess.B8, chess.G8],
+    chess.BISHOP: [chess.C1, chess.F1, chess.C8, chess.F8],
+    chess.ROOK: [chess.A1, chess.H1, chess.A8, chess.H8]
+}
+
 pieceSquareValue = { 
 chess.PAWN : [
  0,  0,  0,  0,  0,  0,  0,  0,
