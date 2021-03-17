@@ -16,13 +16,14 @@ pieces = {
 }
 
 piecesToInitialPositions = {
-    chess.KNIGHT : [chess.B1, chess.G1, chess.B8, chess.G8],
-    chess.BISHOP : [chess.C1, chess.F1, chess.C8, chess.F8],
-    chess.ROOK : [chess.A1, chess.H1, chess.A8, chess.H8]
+    chess.KNIGHT: [chess.B1, chess.G1, chess.B8, chess.G8],
+    chess.BISHOP: [chess.C1, chess.F1, chess.C8, chess.F8],
+    chess.ROOK: [chess.A1, chess.H1, chess.A8, chess.H8]
 }
 
 # Define PHASE
-def measureGamePhases(board, move):
+
+def measureGamePhases(board):
     fen = board.board_fen().split("/")
 
     lstPieces = board.piece_map()
@@ -60,15 +61,15 @@ def measureGamePhases(board, move):
     return phase
 
 # All Phases
-def captureEvaluate(board, capture):
+
+def captureEvaluate(board): 
     value = 0
-    # piece = board.piece_at(move.to_square)
-    # if piece:
-    #     captures.append(pieces[piece.piece_type])
-    value = pieces[capture]
+    move = board.pop()
+    if board.is_capture(move):
+        value = pieces[board.piece_type_at(move.to_square)]
+    board.push(move)
 
     return value
-
 
 def boardValueEvaluate(board):
     vWhite = 0
@@ -79,14 +80,15 @@ def boardValueEvaluate(board):
         else:
             vWhite += pieces[piece.piece_type]
 
-    if board.turn == chess.BLACK:
+    if board.turn != chess.BLACK:
         return vBlack - vWhite
     else:
         return vWhite - vBlack
 
 
 # Phase 0 (earlyGame)
-def devMinorsEvaluate(board, move):
+def devMinorsEvaluate(board):
+    move = board.peek()
     pieceType = board.piece_type_at(move.to_square)
     validPieces = {chess.KNIGHT, chess.BISHOP}
     if not pieceType in validPieces:
@@ -96,7 +98,8 @@ def devMinorsEvaluate(board, move):
         return positions[move.to_square]
     return pieceSquareValue[pieceType][move.to_square]
 
-def rookEvaluate(board, move):
+def rookEvaluate(board):
+    move = board.peek()
     if (board.piece_type_at(move.to_square) != chess.ROOK):
         return 0
 
@@ -106,7 +109,8 @@ def rookEvaluate(board, move):
 
     return 70 if board.is_castling(move) else positions[move.to_square]
 
-def devPawnsEvaluate(board, move):
+def devPawnsEvaluate(board):
+    move = board.peek()
     if board.piece_type_at(move.to_square) != chess.PAWN:
         return 0
 
@@ -116,137 +120,146 @@ def devPawnsEvaluate(board, move):
 
     return pieceSquareValue[chess.PAWN][move.to_square]
 
-# Evaluate
-def evaluate(board, move, capture):
-    weight = [
-        {"capture": 1.3, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7},
-        {"capture": 1.6, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7},
-        {"capture": 1.3, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7}
-    ]
+
+def suicideCaptureEvaluate(board):
+    move = board.pop()
     value = 0
-    phase = measureGamePhases(board, move)
 
-    value += captureEvaluate(board, capture) * weight[phase]["capture"]
-    # print(move, value)
-    value += boardValueEvaluate(board) * weight[phase]["boardValue"]
-    # print(move, value)
-    value += devMinorsEvaluate(board, move) * weight[phase]["devMinors"]
-    # print(move, value)
-    value += rookEvaluate(board, move) * weight[phase]["rook"]
-    # print(move, value)
-    value += devPawnsEvaluate(board, move) * weight[phase]["devPawns"]
-    # print(move, value)
-
+    turn = chess.WHITE if board.turn == chess.BLACK else chess.BLACK
+    if len(board.attackers(turn, move.to_square)) > 0:
+        value = -pieces[board.piece_type_at(move.from_square)]
+    
+    board.push(move)
     return value
 
-# Minimax
-def minimax(board, depth, maximizing_player, alfa=float("-inf"), beta=float("inf"), move=None, capture=None):
+# Evaluate de checkmate
+# Evaluate de check não garantido
+
+# Evaluate
+def evaluate(board):
+    value = 0
+    phase = measureGamePhases(board)
+    weight = [
+        {"capture": 1.3, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7, "suicide" : 1.0},
+        {"capture": 1.6, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7, "suicide" : 1.0},
+        {"capture": 1.3, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7, "suicide" : 1.0}
+    ]
+
+    value += captureEvaluate(board) * weight[phase]["capture"]
+    value += boardValueEvaluate(board) * weight[phase]["boardValue"]
+    value += devMinorsEvaluate(board) * weight[phase]["devMinors"]
+    value += rookEvaluate(board) * weight[phase]["rook"]
+    value += devPawnsEvaluate(board) * weight[phase]["devPawns"]
+    # value += suicideCaptureEvaluate(board)  * weight[phase]["suicide"]
+    move = board.peek()
+
+    positions = pieceSquareValue[board.piece_type_at(move.to_square)]
+    if board.turn == chess.BLACK:
+        positions = positions[::-1]
+    
+    return value + positions[move.to_square]
+
+def minimax02(board, depth, maximizing, alpha=float('-inf'), beta=float('inf')):
     if depth == 0 or board.is_game_over():
-        return evaluate(board, move, capture), board.peek()
+        score = evaluate(board)
+        return score, board.peek()
+        
 
-    if maximizing_player:
-        lastMove = None
-        print("MAX")
-        for legalMove in board.legal_moves:
-            control = False
-            oldAlfa = alfa
-            oldMove = lastMove
-            if board.is_capture(legalMove):
-                capture = board.piece_type_at(legalMove.to_square)
-            board.push(legalMove)
-            print("max")
-            valueAux = minimax(board, depth - 1, False, alfa, beta, legalMove, capture)
-            print(f"alfa: {alfa}, value: {valueAux}, max")
-            input()
-            if alfa > valueAux[0]:
-                board.pop()
-            else:
-                alfa = valueAux[0]
-                lastMove = board.pop()
-                # print(f"mudou o lastMove, move: {lastMove} ,valor: {alfa}")
-            if beta <= alfa:
-                print(f"beta: {beta}, alfa: {alfa}, lastMove: {lastMove}, oldAlfa: {oldAlfa}, oldMove: {oldMove}, max")               
-                control = True
-                break
-        return alfa if not control else oldAlfa, lastMove if not control else oldMove
+    bestScore = float('-inf') if maximizing else float('inf')
+    bestMove = None
+    for legalMove in board.legal_moves:
+        board.push(legalMove)
+        maxDepthStateScore, maxDepthBestMove = minimax02(board, depth -1, not maximizing, alpha, beta)  
+        board.pop()
 
-    else:
-        lastMove = None
-        print("MIN")
-        for legalMove in board.legal_moves:
-            control = False
-            oldBeta = beta
-            oldMove = lastMove
-            if board.is_capture(legalMove):
-                capture = board.piece_type_at(legalMove.to_square)
-            board.push(legalMove)
-            print("min")
-            valueAux = minimax(board, depth - 1, True, alfa, beta, legalMove, capture)
-            print(f"{valueAux}, min")
-            input()
-            if beta < valueAux[0]:
-                board.pop()
-            else:
-                beta = valueAux[0]
-                lastMove = board.pop()
-            if beta <= alfa:
-                print(f"beta: {beta}, alfa: {alfa}, lastMove: {lastMove}, oldBeta: {oldBeta}, oldMove: {oldMove}, min")               
-                control = True
-                break
-        return beta if not control else oldBeta, lastMove if not control else oldMove
+        if maximizing:
+            bestScore = max(bestScore, maxDepthStateScore)
+            bestMove = legalMove
+            alpha = max(alpha, bestScore)
 
-# def minimax(board, depth, maximizing_player, move=None, capture=None):
-#     if depth == 0 or board.is_game_over():
-#         return evaluate(board, move, capture), board.peek()
+            
+        else:
+            bestScore = min(bestScore, maxDepthStateScore)
+            bestMove = legalMove
+            beta = min(beta, bestScore)
+        
+        if beta <= alpha:
+            break
 
-#     if maximizing_player:
-#         lastMove = None
-#         value = float("-inf")
-#         for legalMove in board.legal_moves:
-#             if board.is_capture(legalMove):
-#                 capture = board.piece_type_at(legalMove.to_square)
-#             board.push(legalMove)
-#             valueAux = minimax(board, depth - 1, False, legalMove, capture)
-#             if value > valueAux[0]:
-#                 board.pop()
-#             else:
-#                 value = valueAux[0]
-#                 lastMove = board.pop()
-#         return value, lastMove
-
-#     else:
-#         lastMove = None
-#         value = float("inf")
-#         for legalMove in board.legal_moves:
-#             if board.is_capture(legalMove):
-#                 capture = board.piece_type_at(legalMove.to_square)
-#             board.push(legalMove)
-#             valueAux = minimax(board, depth - 1, True, legalMove, capture)
-#             if value < valueAux[0]:
-#                 board.pop()
-#             else:
-#                 value = valueAux[0]
-#                 lastMove = board.pop()
-#         return value, lastMove
+    return bestScore, bestMove
 
 # Play
+def move(board, isWhite, player):
+    
+    choosedMove = None
+    if not player:
+        globalScore = float('-inf') if isWhite else float('inf')
+
+        scores = []
+        for legalMove in board.legal_moves:
+            board.push(legalMove)
+            maxDepthStateScore, maxDepthBestMove = minimax02(board, 2, not isWhite)
+            scores.append((str(legalMove), maxDepthStateScore))
+            board.pop()
+
+            if isWhite and globalScore < maxDepthStateScore:
+                globalScore = maxDepthStateScore
+                choosedMove = legalMove
+
+                
+            elif not isWhite and globalScore > maxDepthStateScore:
+                globalScore = maxDepthStateScore
+                choosedMove = legalMove
+
+        print(f"Movimento escolhido: {choosedMove}")
+        print(f"Movimentos: {scores}")
+        print(f"Pontuação máxima: {globalScore}")
+        turn = "Branco" if isWhite else "Preto"
+        print(f"Jogador: {turn}")
+
+    else:
+        while choosedMove == None:
+            print(f"Jogadas possíveis: {board.legal_moves}")
+            print("Qual sua jogada?")
+            try:
+                receivedMove = board.parse_san(input())
+                if receivedMove in board.legal_moves:
+                    choosedMove = receivedMove   
+            except ValueError:
+                print("Jogada invalida.")
+                print()
+
+    print()
+    print(f"Jogada da IA: {choosedMove}") if not player else print(f"Sua Jogada: {choosedMove}")
+    board.push(choosedMove)
+
 def play():
-    while (not board.is_game_over()):
+    board = chess.Board()
+    controlePlayer = [False, False]
+    while True:
+        print("Qual cor você será? (0 - Branco, 1 - Preto, 2 - Nenhum)")
+        try:
+            option = int(input())
+            if not option == 2:
+                controlePlayer[option] = True
+            break
+        except IndexError:
+            print("Opção inválida.")
+        except TypeError:
+            print("Opção inválida.")
+
+    print(f'\n\n Que comecem os jogos \n\n')
+    
+    while not board.is_game_over():
         if(board.turn == chess.WHITE):
-            board.push(minimax(board, 2, True)[1])
+            move(board, True, controlePlayer[0])
             print("WHITE")
         else:
-            # board.push(minimax(board, 6, True)[1])
-            # board.push(jogadas.pop())
-            # print(board.legal_moves)
-
-            jogada = input()
-            board.push_san(jogada)
-
+            move(board, False, controlePlayer[1])
             print("BLACK")
-
+    
         print(f'{board} \n')
-
+    
     if board.is_stalemate():
         return "Stalemate"
     if board.is_checkmate():
@@ -258,19 +271,5 @@ def play():
     if board.is_fivefold_repetition():
         return "FiveFold"
 
-jogadas = [chess.Move(chess.E2, chess.D1), chess.Move(chess.H6, chess.E2), chess.Move(chess.F8, chess.H6), chess.Move(chess.G7, chess.G6)]
-
-board = chess.Board(fen="rnbqkbnr/pp2pppp/2p5/3p4/4N3/8/PPPPPPPP/R1BQKBNR w KQkq d6 0 3")
-
-# print(board.pieces(chess.PAWN, chess.WHITE))
-# board.push_san("e4")
-# board.push_san("e5")
-# board.push_san("Qh5")
-# board.push_san("Nc6")
-# board.push_san("Bc4")
-# board.push_san("Nf6")
-
-print(f'\n\n Que comecem os jogos \n\n')
 jogada = play()
-print(f'F I N A L - {jogada}')
-print(f'{board} \n')
+print(jogada)
