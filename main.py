@@ -22,28 +22,48 @@ def measureGamePhases(board):
     # 4 -> 3.0
     # 5 -> 1.6
 
+    p = []
     if board.ply() >= 12:
-        points += 100
+        points += 100 * 1.5
+    p.append(points)
 
     if len(lstPieces.values()) <= 30:
         points += 100 * 1.5
-
-    if not board.has_castling_rights(chess.WHITE):
-        points += 100 * 3
-
-    if not board.has_castling_rights(chess.BLACK):
-        points += 100 * 3
+    p.append(points)
 
     if len(re.findall("(n|r|b)", fen[0])) + len(re.findall("(N|R|B)", fen[7])) < 7:
-        points += 100 * 1.6
-
-    # Transitions mid => late
+        points += 100 * 1.5
+    p.append(points)
 
     if points > 300:
-        phase += 1
+        phase = 1
+        if board.ply() >= 36:
+            points += 100
+    
+        if len(lstPieces.values()) <= 16:
+            points += 100 * 1.4
+    
+        if len(re.findall("(q|Q)", board.board_fen())) == 0:
+            points += 100 * 1.7
+    
+        if len(re.findall("(q|Q)", board.board_fen())) == 1 and len(re.findall("(n|r|b|N|R|B)", board.board_fen())) < 3:
+            points += 100 * 2.4
+    
+        if board.promoted != 0:
+            points += 100 * 3
+    
+        match = 0
+        for pieceType in ["n", "r", "b", "N", "R", "B"]:
+            if len(re.findall(f"(pieceType)", board.board_fen())) > 1:
+                match += 1
+    
+        if match < 2:
+            points += 100 * 1.7
+            
+        if points > 1150:
+            return 2
 
     return phase
-
 # All Phases
 
 def captureEvaluate(board): 
@@ -55,181 +75,190 @@ def captureEvaluate(board):
 
     return value
 
-def boardValueEvaluate(board):
+def boardValueEvaluate(board, playerColor):
     vWhite = 0
     vBlack = 0
+    
     for piece in board.piece_map().values():
         if piece.color == chess.BLACK:
             vBlack += pieceValues[piece.piece_type]
         else:
             vWhite += pieceValues[piece.piece_type]
 
-    if board.turn != chess.BLACK:
+    if playerColor != chess.BLACK:
         return vBlack - vWhite
     else:
         return vWhite - vBlack
 
-def genericPieceEvaluate(board, move, validPieces):
+def assertPieceType(board, move, validPieces):
     pieceType = board.piece_type_at(move.to_square)
-    if not pieceType in validPieces:
-        return False
+    if pieceType in validPieces:
+        return True
+    return False
+
+def getSquareValue(board, move):
+    pieceType = board.piece_type_at(move.to_square)
+    values = pieceSquareValue[pieceType][::-1] if board.turn == chess.BLACK else pieceSquareValue[pieceType]
+    return values[move.to_square]
 
 # Phase 0 (earlyGame)
 def devMinorsEvaluate(board):
-    move = board.peek()
-    if genericPieceEvaluate(board, move, {chess.KNIGHT, chess.BISHOP}): return 0
-    
-    pieceType = board.piece_type_at(move.to_square)
-    if (board.turn == chess.BLACK):
-        positions = pieceSquareValue[pieceType][::-1]
-        return positions[move.to_square]
-    return pieceSquareValue[pieceType][move.to_square]
+    move1 = board.pop()
+    move2 = board.pop()
+    relevantMove = board.peek()
+    board.push(move2)
+    board.push(move1)
+    if not assertPieceType(board, relevantMove, {chess.KNIGHT, chess.BISHOP}): return 0
+    return getSquareValue(board, relevantMove)
 
 def rookEvaluate(board):
-    move = board.peek()
-    # if (board.piece_type_at(move.to_square) != chess.ROOK):
-        # return 0
-    if genericPieceEvaluate(board, move, {chess.ROOK}): return 0
-
-    positions = pieceSquareValue[chess.ROOK]
-    if (board.turn == chess.BLACK):
-        positions = pieceSquareValue[chess.ROOK][::-1]
-
-    return 70 if board.is_castling(move) else positions[move.to_square]
+    move1 = board.pop()
+    move2 = board.pop()
+    relevantMove = board.peek()
+    board.push(move2)
+    board.push(move1)
+    if not assertPieceType(board, relevantMove, {chess.ROOK}): return 0
+    return 200 if board.is_castling(relevantMove) else getSquareValue(board, relevantMove)
 
 def devPawnsEvaluate(board):
-    move = board.peek()
-    # if board.piece_type_at(move.to_square) != chess.PAWN:
-        # return 0
-    if genericPieceEvaluate(board, move, {chess.PAWN}): return 0
-    if board.turn == chess.BLACK:
-        positionsPawns = pieceSquareValue[chess.PAWN][::-1]
-        return positionsPawns[move.to_square]
+    move1 = board.pop()
+    move2 = board.pop()
+    relevantMove = board.peek()
+    board.push(move2)
+    board.push(move1)
+    if not assertPieceType(board, relevantMove, {chess.PAWN}): return 0
+    return getSquareValue(board, relevantMove)
 
-    return pieceSquareValue[chess.PAWN][move.to_square]
-
-
-def suicideCaptureEvaluate(board):
-    move = board.pop()
+def suicideCaptureEvaluate(board, playerColor):
+    move1 = board.pop()
+    move2 = board.pop()
     value = 0
+    relevantMove = board.peek()
+    if len(board.attackers(playerColor, relevantMove.to_square)) > 0:
+        value = -(pieceValues[board.piece_type_at(relevantMove.to_square)])
+    board.push(move2)
+    board.push(move1)
 
-    turn = chess.WHITE if board.turn == chess.BLACK else chess.BLACK
-    if len(board.attackers(turn, move.to_square)) > 0:
-        value = -pieceValues[board.piece_type_at(move.from_square)]
-    
-    board.push(move)
     return value
 
-# Evaluate de checkmate
-# Evaluate de check não garantido
+def checkEvaluate(board, playerColor):
+    isCheckmate = board.is_checkmate()
+    if isCheckmate:
+        if board.turn == playerColor:
+            return float('inf')
+        return float('-inf')
+    return 0
+
+def promoteEvaluate(board, playerColor):
+    move = board.peek()
+    if not assertPieceType(board, move, {chess.PAWN}): return 0
+    row = move.to_square
+    row += 8
+    while row <= 63 and row >= 0:
+        if board.piece_type_at(row) != None:
+            return 0
+        row += 8 * (-1 if playerColor == chess.BLACK else 1)
+    return 900
 
 # Evaluate
-def evaluate(board):
+def evaluate(board, playerColor, weight):
     value = 0
-    phase = measureGamePhases(board)
-    weight = [
-        {"capture": 1.3, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7, "suicide" : 1.0},
-        {"capture": 1.6, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7, "suicide" : 1.0},
-        {"capture": 1.3, "boardValue": 1.4, "devMinors" : 1.45, "rook" : 1.0, "devPawns" : 1.7, "suicide" : 1.0}
-    ]
 
-    value += captureEvaluate(board) * weight[phase]["capture"]
-    value += boardValueEvaluate(board) * weight[phase]["boardValue"]
-    value += devMinorsEvaluate(board) * weight[phase]["devMinors"]
-    value += rookEvaluate(board) * weight[phase]["rook"]
-    value += devPawnsEvaluate(board) * weight[phase]["devPawns"]
-    value += suicideCaptureEvaluate(board)  * weight[phase]["suicide"]
-    
-    move = board.peek()
-    positions = pieceSquareValue[board.piece_type_at(move.to_square)]
+    value += captureEvaluate(board) * weight["capture"]
+    value += boardValueEvaluate(board, playerColor) * weight["boardValue"]
+    value += devMinorsEvaluate(board) * weight["devMinors"]
+    value += rookEvaluate(board) * weight["rook"]
+    value += devPawnsEvaluate(board) * weight["devPawns"]
+    value += suicideCaptureEvaluate(board, playerColor)  * weight["suicide"]
+    value += checkEvaluate(board, playerColor)
 
-    if board.turn == chess.BLACK:
-        positions = positions[::-1]
-    
-    return value + positions[move.to_square]
+    if weight["promote"] != 0:
+        value += promoteEvaluate(board, playerColor) * weight["promote"]
 
-def minimax(board, depth, maximizing, alpha=float('-inf'), beta=float('inf')):
+    return value
+
+def minimax(board, depth, maximizing, playerColor, alpha=float('-inf'), beta=float('inf')):
     if depth == 0 or board.is_game_over():
-        score = evaluate(board)
+        weight = [
+            {"capture": 1.3, "boardValue": 1.1, "devMinors" : 1.45, "rook" : 1.2, "devPawns" : 1.45, "suicide" : 1.3, "promote" : 0},
+            {"capture": 1.4, "boardValue": 1, "devMinors" : 1.6, "rook" : 1, "devPawns" : 1.3, "suicide" : 1.4, "promote" : 0.2},
+            {"capture": 1.6, "boardValue": 1.4, "devMinors" : 1.7, "rook" : 1, "devPawns" : 1, "suicide" : 1.4, "promote" : 3}
+        ]
+
+        score = evaluate(board, playerColor, weight[measureGamePhases(board)])
         return score, board.peek()
         
-    bestScore = float('-inf') if maximizing else float('inf')
+    score = float('-inf') if maximizing else float('inf')
     bestMove = None
     for legalMove in board.legal_moves:
-        board.push(legalMove)
-        maxDepthStateScore, maxDepthBestMove = minimax(board, depth -1, not maximizing, alpha, beta)  
-        board.pop()
 
         if maximizing:
-            bestScore = max(bestScore, maxDepthStateScore)
+            board.push(legalMove)
+            maxDepthStateScore, maxDepthBestMove = minimax(board, depth -1, False, playerColor, alpha, beta)  
+            board.pop()
+            score = max(score, maxDepthStateScore)
             bestMove = legalMove
-            alpha = max(alpha, bestScore)
-
+            alpha = max(alpha, score)
             
         else:
-            bestScore = min(bestScore, maxDepthStateScore)
+            board.push(legalMove)
+            maxDepthStateScore, maxDepthBestMove = minimax(board, depth -1, True, playerColor, alpha, beta)  
+            board.pop()
+            score = min(score, maxDepthStateScore)
             bestMove = legalMove
-            beta = min(beta, bestScore)
+            beta = min(beta, score)
         
         if beta <= alpha:
             break
 
-    return bestScore, bestMove
+    return score, bestMove    
 
 # Play
-def move(board, isWhite, player):
-    
-    choosedMove = None
-    turn = "Branco" if isWhite else "Preto"
+def move(board, playerColor, player):
+    chosenMove = None
+    turn = "Branco" if board.turn == chess.WHITE else "Preto"
     if not player:
-        globalScore = float('-inf') if isWhite else float('inf')
+        globalScore = float('-inf') if board.turn != playerColor else float('inf')
 
         scores = []
         for legalMove in board.legal_moves:
             board.push(legalMove)
-            maxDepthStateScore, maxDepthBestMove = minimax(board, 2, not isWhite)
+            maxDepthStateScore, maxDepthBestMove = minimax(board, 2, False, playerColor)
             scores.append((str(legalMove), maxDepthStateScore))
             board.pop()
 
-            if isWhite and globalScore < maxDepthStateScore:
+            if globalScore < maxDepthStateScore:
                 globalScore = maxDepthStateScore
-                choosedMove = legalMove
+                chosenMove = legalMove
 
-                
-            elif not isWhite and globalScore > maxDepthStateScore:
-                globalScore = maxDepthStateScore
-                choosedMove = legalMove
-
-        # print(f"Movimento escolhido: {choosedMove}")
+        # print(f"Movimento escolhido: {chosenMove}")
         # print(f"Movimentos: {scores}")
         # print(f"Pontuação máxima: {globalScore}")
         # print(f"Jogador: {turn}")
 
     else:
-        while choosedMove == None:
+        while chosenMove == None:
             print(f"Jogadas possíveis: {board.legal_moves}")
             print("Qual sua jogada?")
             try:
                 receivedMove = board.parse_san(input())
                 if receivedMove in board.legal_moves:
-                    choosedMove = receivedMove   
+                    chosenMove = receivedMove   
             except ValueError:
                 print("Jogada invalida.")
                 print()
 
     print()
-    print(f"Jogada da IA ({turn}): {choosedMove}") if not player else print(f"Sua Jogada: {choosedMove}")
-    board.push(choosedMove)
+    print(f"Jogada da IA ({turn}): {chosenMove}") if not player else print(f"Sua Jogada: {chosenMove}")
+    board.push(chosenMove)
 
 def play():
     board = chess.Board()
-    controlePlayer = [False, False]
     while True:
-        print("Qual cor você será? (0 - Branco, 1 - Preto, 2 - Nenhum)")
+        print("Qual cor você será? (0 - Branco, 1 - Preto)")
         try:
             option = int(input())
-            if not option == 2:
-                controlePlayer[option] = True
+            playerColor = chess.BLACK if option == 1 else chess.WHITE
             break
         except IndexError:
             print("Opção inválida.")
@@ -238,13 +267,13 @@ def play():
 
     print(f'\n Que comecem os jogos \n')
     
+    print(f'{board if playerColor == chess.WHITE else board.transform(chess.flip_vertical)} \n')
     while not board.is_game_over():
-        if(board.turn == chess.WHITE):
-            move(board, True, controlePlayer[0])
+        if(board.turn == playerColor):
+            move(board, playerColor, True)
         else:
-            move(board, False, controlePlayer[1])
-    
-        print(f'{board} \n')
+            move(board, playerColor, False)
+        print(f'{board if playerColor == chess.WHITE else board.transform(chess.flip_vertical)} \n')
     
     if board.is_stalemate():
         return "Stalemate"
@@ -260,3 +289,6 @@ def play():
 
 jogada = play()
 print(jogada)
+
+# Contra o thiago
+# "r1bqk1nr/pppp3p/5pp1/3Pp3/1b1nP3/2P5/PP3PPP/RNBQKBNR w KQkq - 0 1"

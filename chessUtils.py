@@ -7,7 +7,7 @@ pieceValues = {
     chess.KNIGHT: 320,
     chess.BISHOP: 330,
     chess.QUEEN: 900,
-    chess.KING: 20000
+    chess.KING: 0
 }
 
 piecesToInitialPositions = {
